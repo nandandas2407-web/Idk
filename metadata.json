@@ -1,0 +1,6 @@
+{
+  "name": "Orin IDE",
+  "description": "Orin IDE is an AI-first professional mobile development environment to create, edit, build, and export real standalone APKs directly from your phone.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
