@@ -7,6 +7,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:   # allows manual trigger from GitHub UI
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # opt into Node.js 24 now
+
 jobs:
   build:
     name: Build Release APK
@@ -24,21 +27,20 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle            # caches ~/.gradle automatically
+          cache: gradle
 
       # ── 3. Secrets ─────────────────────────────────────────────────────────
-      # The project reads GEMINI_API_KEY from a .env file via the Secrets
-      # Gradle Plugin (secrets { propertiesFileName = ".env" }).
-      # We write it here so Gradle can pick it up at build time.
+      # The Secrets Gradle Plugin reads GEMINI_API_KEY from a .env file
+      # (secrets { propertiesFileName = ".env" } in app/build.gradle.kts).
       - name: Write .env file
         run: echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" > .env
 
       # ── 4. Keystore ─────────────────────────────────────────────────────────
-      # Store your keystore as a base-64 GitHub Secret named KEYSTORE_BASE64.
-      # The signing config in app/build.gradle.kts reads:
-      #   storeFile   = file(System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks")
-      #   storePassword = System.getenv("STORE_PASSWORD")
-      #   keyPassword   = System.getenv("KEY_PASSWORD")
+      # app/build.gradle.kts signing config reads:
+      #   storeFile   = file(KEYSTORE_PATH  ?: "${rootDir}/my-upload-key.jks")
+      #   storePassword = STORE_PASSWORD
+      #   keyAlias      = "upload"
+      #   keyPassword   = KEY_PASSWORD
       - name: Decode & write keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -55,9 +57,18 @@ jobs:
           KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew assembleRelease --stacktrace
+        run: ./gradlew assembleRelease --stacktrace 2>&1 | tee build.log; exit ${PIPESTATUS[0]}
 
-      # ── 7. Upload artifact ──────────────────────────────────────────────────
+      # ── 7. Upload log on failure ────────────────────────────────────────────
+      - name: Upload build log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 7
+
+      # ── 8. Upload APK ───────────────────────────────────────────────────────
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
